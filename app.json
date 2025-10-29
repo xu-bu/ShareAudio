@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "BluetoothAudioShare",
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow app to access your microphone for audio streaming"
+        }
+      ]
+    ],
+    "android": {
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_ADVERTISE",
+        "RECORD_AUDIO",
+        "ACCESS_FINE_LOCATION"
+      ]
+    }
+  }
+}
