@@ -22,6 +22,15 @@
         "RECORD_AUDIO",
         "ACCESS_FINE_LOCATION"
       ]
+    },
+    "web": {
+      "build": {
+        "babel": {
+          "include": [
+            "@expo/vector-icons"
+          ]
+        }
+      }
     }
   }
 }
