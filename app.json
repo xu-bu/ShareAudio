@@ -1,6 +1,9 @@
 {
   "expo": {
     "name": "BluetoothAudioShare",
+    "experiments": {
+      "baseUrl": "/ShareAudio/"
+    },
     "plugins": [
       [
         "expo-av",
