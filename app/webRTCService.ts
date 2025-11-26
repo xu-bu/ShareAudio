@@ -31,10 +31,10 @@ class WebRTCService {
 
   private config: WebRTCConfig = {
     iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: ['stun:stun.l.google.com:19302'] },
+      { urls: ['stun:stun1.l.google.com:19302'] },
       // Add TURN servers for better connectivity
-      // { urls: 'turn:your-turn-server.com', username: 'user', credential: 'pass' }
+      // { urls: ['turn:your-turn-server.com'], username: 'user', credential: 'pass' }
     ],
   };
 
