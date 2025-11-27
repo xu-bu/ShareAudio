@@ -10,6 +10,8 @@ import {
   Platform,
 } from 'react-native';
 
+const startToShare=(params:any)=>{}
+const sendStopShare=(params:any)=>{}
 export default function AudioShareApp() {
   const [isMuted, setIsMuted] = useState(false);
   const [roomId, setRoomId] = useState('');

@@ -4,16 +4,18 @@ import {
   RTCSessionDescription,
   mediaDevices,
   MediaStream,
-} from 'react-native-webrtc';
+} from "react-native-webrtc";
 
 export interface WebRTCConfig {
   iceServers: {
     urls: string[];
+    username?: string;
+    credential?: string;
   }[];
 }
 
 export interface SignalingMessage {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'join' | 'leave';
+  type: "offer" | "answer" | "ice-candidate" | "join" | "leave";
   roomId: string;
   senderId: string;
   data?: any;
@@ -23,18 +25,34 @@ class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private ws: WebSocket | null = null;
-  private roomId: string = '';
-  private peerId: string = '';
+  private roomId: string = "";
+  private peerId: string = "";
   private onRemoteStream?: (stream: MediaStream) => void;
   private onConnectionStateChange?: (state: string) => void;
   private onListenerCountChange?: (count: number) => void;
 
   private config: WebRTCConfig = {
     iceServers: [
-      { urls: ['stun:stun.l.google.com:19302'] },
-      { urls: ['stun:stun1.l.google.com:19302'] },
-      // Add TURN servers for better connectivity
-      // { urls: ['turn:your-turn-server.com'], username: 'user', credential: 'pass' }
+      // STUN servers
+      { urls: ["stun:stun.l.google.com:19302"] },
+      { urls: ["stun:stun1.l.google.com:19302"] },
+
+      // Free TURN servers (for NAT traversal)
+      {
+        urls: ["turn:openrelay.metered.ca:80"],
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+      {
+        urls: ["turn:openrelay.metered.ca:443"],
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+      {
+        urls: ["turn:openrelay.metered.ca:443?transport=tcp"],
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
     ],
   };
 
@@ -53,7 +71,7 @@ class WebRTCService {
         this.ws = new WebSocket(signalingServerUrl);
 
         this.ws.onopen = () => {
-          console.log('Connected to signaling server');
+          console.log("Connected to signaling server");
           resolve();
         };
 
@@ -62,12 +80,12 @@ class WebRTCService {
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error("WebSocket error:", error);
           reject(error);
         };
 
         this.ws.onclose = () => {
-          console.log('Disconnected from signaling server');
+          console.log("Disconnected from signaling server");
         };
       } catch (error) {
         reject(error);
@@ -83,12 +101,7 @@ class WebRTCService {
       // Get audio stream from microphone
       // For system audio, you might need additional native modules
       const stream = await mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          sampleRate: 48000,
-        },
+        audio: true,
         video: false,
       });
 
@@ -104,15 +117,15 @@ class WebRTCService {
 
       // Send join message to signaling server
       this.sendSignalingMessage({
-        type: 'join',
+        type: "join",
         roomId: this.roomId,
         senderId: this.peerId,
-        data: { role: 'host' },
+        data: { role: "host" },
       });
 
       return roomId;
     } catch (error) {
-      console.error('Error starting audio share:', error);
+      console.error("Error starting audio share:", error);
       throw error;
     }
   }
@@ -127,10 +140,10 @@ class WebRTCService {
 
       // Send join message
       this.sendSignalingMessage({
-        type: 'join',
+        type: "join",
         roomId: this.roomId,
         senderId: this.peerId,
-        data: { role: 'listener' },
+        data: { role: "listener" },
       });
 
       // Create offer
@@ -143,13 +156,13 @@ class WebRTCService {
 
       // Send offer to signaling server
       this.sendSignalingMessage({
-        type: 'offer',
+        type: "offer",
         roomId: this.roomId,
         senderId: this.peerId,
         data: offer,
       });
     } catch (error) {
-      console.error('Error joining room:', error);
+      console.error("Error joining room:", error);
       throw error;
     }
   }
@@ -157,45 +170,60 @@ class WebRTCService {
   // Create peer connection
   private createPeerConnection(): void {
     this.peerConnection = new RTCPeerConnection(this.config);
+    this.peerConnection._registerEvents();
+
+    // Cast to the proper EventTarget type
+    const pc = this.peerConnection as RTCPeerConnection & {
+      addEventListener<K extends keyof RTCPeerConnectionEventMap>(
+        type: K,
+        listener: (event: RTCPeerConnectionEventMap[K]) => void
+      ): void;
+    };
 
     // Handle ICE candidates
-    this.peerConnection.onicecandidate = (event) => {
+    pc.addEventListener('icecandidate', (event) => {
       if (event.candidate) {
         this.sendSignalingMessage({
-          type: 'ice-candidate',
+          type: "ice-candidate",
           roomId: this.roomId,
           senderId: this.peerId,
           data: event.candidate,
         });
       }
-    };
+    });
 
     // Handle remote stream
-    this.peerConnection.ontrack = (event) => {
-      console.log('Received remote track');
+    pc.addEventListener('track', (event) => {
+      console.log("Received remote track");
       if (event.streams && event.streams[0]) {
-        this.onRemoteStream?.(event.streams[0]);
+        // Cast through unknown to avoid type conflict
+        this.onRemoteStream?.(event.streams[0] as unknown as MediaStream);
       }
-    };
+    });
 
     // Handle connection state changes
-    this.peerConnection.onconnectionstatechange = () => {
-      const state = this.peerConnection?.connectionState || 'unknown';
-      console.log('Connection state:', state);
+    pc.addEventListener('connectionstatechange', () => {
+      const state = this.peerConnection?.connectionState || "unknown";
+      console.log("Connection state:", state);
       this.onConnectionStateChange?.(state);
-    };
+    });
 
     // Handle ICE connection state
-    this.peerConnection.oniceconnectionstatechange = () => {
-      console.log('ICE connection state:', this.peerConnection?.iceConnectionState);
-    };
+    pc.addEventListener('iceconnectionstatechange', () => {
+      console.log(
+        "ICE connection state:",
+        this.peerConnection?.iceConnectionState
+      );
+    });
   }
 
   // Handle signaling messages
-  private async handleSignalingMessage(message: SignalingMessage): Promise<void> {
+  private async handleSignalingMessage(
+    message: SignalingMessage
+  ): Promise<void> {
     try {
       switch (message.type) {
-        case 'offer':
+        case "offer":
           if (this.peerConnection) {
             await this.peerConnection.setRemoteDescription(
               new RTCSessionDescription(message.data)
@@ -204,7 +232,7 @@ class WebRTCService {
             await this.peerConnection.setLocalDescription(answer);
 
             this.sendSignalingMessage({
-              type: 'answer',
+              type: "answer",
               roomId: this.roomId,
               senderId: this.peerId,
               data: answer,
@@ -212,7 +240,7 @@ class WebRTCService {
           }
           break;
 
-        case 'answer':
+        case "answer":
           if (this.peerConnection) {
             await this.peerConnection.setRemoteDescription(
               new RTCSessionDescription(message.data)
@@ -220,7 +248,7 @@ class WebRTCService {
           }
           break;
 
-        case 'ice-candidate':
+        case "ice-candidate":
           if (this.peerConnection && message.data) {
             await this.peerConnection.addIceCandidate(
               new RTCIceCandidate(message.data)
@@ -229,10 +257,10 @@ class WebRTCService {
           break;
 
         default:
-          console.log('Unknown message type:', message.type);
+          console.log("Unknown message type:", message.type);
       }
     } catch (error) {
-      console.error('Error handling signaling message:', error);
+      console.error("Error handling signaling message:", error);
     }
   }
 
@@ -241,7 +269,7 @@ class WebRTCService {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
-      console.error('WebSocket is not connected');
+      console.error("WebSocket is not connected");
     }
   }
 
@@ -271,7 +299,7 @@ class WebRTCService {
     // Send leave message
     if (this.roomId) {
       this.sendSignalingMessage({
-        type: 'leave',
+        type: "leave",
         roomId: this.roomId,
         senderId: this.peerId,
       });
@@ -283,7 +311,7 @@ class WebRTCService {
       this.ws = null;
     }
 
-    this.roomId = '';
+    this.roomId = "";
   }
 
   // Set callback for remote stream
